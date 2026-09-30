@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "stormvisuals",
+  "version": "${version}",
+  "name": "StormVisuals",
+  "description": "Useful client-side visuals for Minecraft servers.",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["dev.stormvisuals.StormVisualsClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
