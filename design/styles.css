@@ -1,0 +1,67 @@
+@font-face{font-family:Comfortaa;src:url('assets/Comfortaa-Regular.ttf') format('truetype');font-weight:400;font-style:normal;font-display:swap}
+:root{font-family:Comfortaa,sans-serif;color:#fff;font-synthesis:none;--accent:#408cff;--surface:rgba(255,255,255,.04);--muted:rgba(255,255,255,.5)}
+*{box-sizing:border-box}
+body{margin:0;min-height:100svh;display:grid;place-items:center;padding:32px;background:#61794a;isolation:isolate}
+body::before{content:'';position:fixed;inset:-3px;z-index:-1;background:url('assets/world.png') center/cover no-repeat;filter:blur(2px)}
+button,input,select{font:inherit;color:inherit}
+button{border:0;cursor:pointer;background:none}
+button,input,select{outline:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+[hidden]{display:none!important}
+.icon-library{position:absolute;width:0;height:0;overflow:hidden}
+.icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.gui{width:880px;max-width:100%;height:560px;overflow:hidden;border-radius:32px;background:rgba(0,0,0,.75);backdrop-filter:blur(50px);-webkit-backdrop-filter:blur(50px);box-shadow:0 0 15px 10px rgba(0,0,0,.35)}
+.header{height:54px;display:flex;align-items:center;gap:12px;padding:0 20px;border-bottom:1px solid rgba(255,255,255,.06)}
+.brand{display:flex;align-items:center;gap:10px;font-size:18px;line-height:24px;white-space:nowrap}
+.brand-icon{color:var(--accent);width:22px;height:22px}
+.search{margin-left:auto;width:200px;height:32px;display:flex;align-items:center;gap:8px;padding:0 10px;background:var(--surface);border-radius:8px;color:rgba(255,255,255,.42)}
+.search .icon{width:16px;height:16px}
+.search input{font-size:12px;min-width:0;width:100%;background:none;border:0;outline:none}
+.search:focus-within{box-shadow:0 0 0 1px var(--accent)}
+.search input::placeholder{color:rgba(255,255,255,.42)}
+.search input::-webkit-search-cancel-button{cursor:pointer}
+.icon-button{width:28px;height:28px;display:grid;place-items:center;border-radius:7px;color:rgba(255,255,255,.5)}
+.icon-button:hover{background:var(--surface);color:#fff}
+.body{display:flex;height:506px}
+.sidebar{flex:0 0 164px;padding:18px 10px;border-right:1px solid rgba(255,255,255,.07)}
+.nav-group+.nav-group{margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)}
+.nav-group h2{margin:0 0 6px;padding:0 12px;color:rgba(255,255,255,.42);font-size:12px;line-height:18px;font-weight:400}
+.nav-item{width:100%;height:36px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:8px;color:rgba(255,255,255,.75);font-size:13px;text-align:left;transition:background .12s,color .12s}
+.nav-item .icon{width:18px;height:18px;color:rgba(255,255,255,.5)}
+.nav-item:hover{background:rgba(255,255,255,.04);color:#fff}
+.nav-item.active{background:rgba(64,140,255,.22);color:#fff}
+.nav-item.active .icon{color:#78adff}
+.content{flex:1;min-width:0;padding:16px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent}
+.columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.column{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--surface);border-radius:12px;overflow:hidden;flex-shrink:0;transition:background .12s}
+.card:hover{background:rgba(255,255,255,.06)}
+.card.expanded{background:rgba(255,255,255,.055)}
+.card-summary{padding:12px;cursor:pointer;min-height:70px}
+.card-heading{display:flex;align-items:center;gap:8px;min-height:24px}
+.module-title{font-size:15px;line-height:24px;white-space:nowrap}
+.keybind{font-size:12px;line-height:18px;color:rgba(255,255,255,.48)}
+.switch{position:relative;width:34px;height:20px;border-radius:20px;background:rgba(255,255,255,.08);flex-shrink:0;transition:background .15s}
+.card-heading>.switch{margin-left:auto}
+.switch::after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;left:3px;top:3px;background:#fff;transition:transform .15s}
+.switch[aria-checked=true]{background:var(--accent)}
+.switch[aria-checked=true]::after{transform:translateX(14px)}
+.description{margin:4px 0 0;color:var(--muted);font-size:12px;line-height:18px}
+.settings{margin:0 14px;padding:12px 0 14px;border-top:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;gap:12px;font-size:12px;line-height:18px}
+.setting{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:24px}
+.setting>span{color:rgba(255,255,255,.8)}
+.setting select{width:152px;height:28px;padding:0 8px;background:rgba(255,255,255,.06);border:0;border-radius:6px;font-size:11px}
+option{background:#202326;color:#fff}
+.slider-setting{display:flex;flex-direction:column;gap:8px}
+.slider-label{display:flex;justify-content:space-between;color:rgba(255,255,255,.8)}
+output{color:var(--muted);font-size:11px}
+input[type=range]{appearance:none;width:100%;height:4px;margin:5px 0;background:linear-gradient(to right,var(--accent) 0 var(--fill,33.33%),rgba(255,255,255,.12) var(--fill,33.33%) 100%);border-radius:4px;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:12px;background:white;border-radius:50%;box-shadow:0 1px 4px #0005}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;background:white;border:0;border-radius:50%}
+.empty{margin:14px 0;color:var(--muted);font-size:13px;text-align:center}
+.reopen{padding:14px 22px;border-radius:12px;background:rgba(0,0,0,.75);backdrop-filter:blur(30px);font-size:16px}
+@media(max-width:720px){body{padding:16px}.gui{height:min(650px,calc(100svh - 32px));border-radius:24px}.body{height:calc(100% - 54px)}.sidebar{flex-basis:144px;padding:16px 8px}.content{padding:16px}.columns{grid-template-columns:1fr}.brand{font-size:15px}.search{width:160px}.header{padding:0 16px}.module-title{font-size:14px}}
+@media(max-width:440px){body{padding:8px}.gui{height:calc(100svh - 16px)}.brand-icon{display:none}.header{gap:8px;padding:0 12px}.search{width:110px}.sidebar{flex-basis:112px;padding:16px 6px}.nav-item{padding:0 6px;gap:6px;font-size:11px}.nav-group h2{padding:0 6px}.content{padding:12px}.setting{align-items:flex-start;flex-wrap:wrap}.setting select{width:100%}.module-title{font-size:12px}.keybind{font-size:10px}.card-summary{padding:12px}.card-heading{gap:5px}.description{font-size:10px}.switch{width:30px;height:18px}.switch::after{width:12px;height:12px}.switch[aria-checked=true]::after{transform:translateX(12px)}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+

@@ -15,6 +15,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Arrays;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -27,7 +29,7 @@ import net.minecraft.resources.Identifier;
 import org.joml.Matrix3x2f;
 import org.joml.Matrix3x2fc;
 
-/** Comfortaa glyph metrics and MTSDF GUI pipeline. */
+/** Comfortaa Latin text with Montserrat Cyrillic and numerals, packed into one MTSDF texture. */
 public final class MtsdfFont {
     private static final Identifier SHADER = Identifier.fromNamespaceAndPath("stormvisuals", "core/mtsdf_text");
     private static final RenderPipeline PIPELINE = RenderPipelines.register(
@@ -37,7 +39,11 @@ public final class MtsdfFont {
                     .withFragmentShader(SHADER)
                     .withVertexFormat(DefaultVertexFormat.POSITION_TEX_COLOR, VertexFormat.Mode.QUADS)
                     .build());
-    private static final FontFace FONT = loadFace("comfortaa_regular_mtsdf");
+    private static final FontFace FONT = loadFace("comfortaa_montserrat_mtsdf");
+    private static final Map<String, TextLayout> LAYOUTS = new LinkedHashMap<>(128, 0.75F, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, TextLayout> entry) { return size() > 512; }
+    };
 
     private static FontFace loadFace(String name) {
         try (InputStream input = MtsdfFont.class.getResourceAsStream("/stormvisuals/font/" + name + ".json")) {
@@ -76,15 +82,42 @@ public final class MtsdfFont {
     private MtsdfFont() {
     }
 
-    public static float width(String text, float size) {
-        float em = 0;
+    private static TextLayout layout(String text) {
+        TextLayout cached = LAYOUTS.get(text);
+        if (cached != null) return cached;
+        float[] quads = new float[text.length() * 8];
+        int count = 0;
+        float pen = 0;
         for (int offset = 0; offset < text.length();) {
             int codepoint = text.codePointAt(offset);
             Glyph glyph = FONT.glyphs().getOrDefault(codepoint, FONT.glyphs().get((int) '?'));
-            if (glyph != null) em += glyph.advance();
+            if (glyph != null) {
+                if (glyph.visible()) {
+                    quads[count++] = pen + glyph.left();
+                    quads[count++] = FONT.baseline() + glyph.top();
+                    quads[count++] = pen + glyph.right();
+                    quads[count++] = FONT.baseline() + glyph.bottom();
+                    quads[count++] = glyph.u0() / FONT.atlasWidth();
+                    quads[count++] = glyph.v0() / FONT.atlasHeight();
+                    quads[count++] = glyph.u1() / FONT.atlasWidth();
+                    quads[count++] = glyph.v1() / FONT.atlasHeight();
+                }
+                pen += glyph.advance();
+            }
             offset += Character.charCount(codepoint);
         }
-        return Math.max(8, em * size);
+        TextLayout result = new TextLayout(pen, count == quads.length ? quads : Arrays.copyOf(quads, count));
+        LAYOUTS.put(text, result);
+        return result;
+    }
+
+    public static float width(String text, float size) {
+        return Math.max(8, layout(text).width() * size);
+    }
+
+    /** Exact pen advance for caret and selection positions, including empty strings. */
+    public static float advanceWidth(String text, float size) {
+        return layout(text).width() * size;
     }
 
     public static float height(float size) {
@@ -93,18 +126,23 @@ public final class MtsdfFont {
 
     public static void draw(GuiGraphics graphics, String text, float x, float y, float size, int argb) {
         if (text.isEmpty() || size <= 0 || (argb >>> 24) == 0) return;
+        TextLayout layout = layout(text);
+        if (layout.quads().length == 0) return;
         Matrix3x2fc pose = new Matrix3x2f(graphics.pose());
         ScreenRectangle bounds = new ScreenRectangle((int) Math.floor(x), (int) Math.floor(y),
-                (int) Math.ceil(width(text, size)) + 2, (int) Math.ceil(height(size)) + 2)
+                (int) Math.ceil(Math.max(8, layout.width() * size)) + 2, (int) Math.ceil(height(size)) + 2)
                 .transformMaxBounds(pose);
         ScreenRectangle scissor = graphics.scissorStack.peek();
         if (scissor != null) bounds = scissor.intersection(bounds);
+        if (bounds == null) return;
         AbstractTexture atlas = Minecraft.getInstance().getTextureManager().getTexture(FONT.texture());
         TextureSetup texture = TextureSetup.singleTexture(atlas.getTextureView(),
                 RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
         graphics.guiRenderState.submitGuiElement(new TextState(pose, texture, scissor, bounds,
-                text, x, y, size, argb));
+                layout, x, y, size, argb));
     }
+
+    private record TextLayout(float width, float[] quads) {}
 
     private record FontFace(Identifier texture, Map<Integer, Glyph> glyphs, float lineHeight,
                             float baseline, int atlasWidth, int atlasHeight) {
@@ -118,7 +156,7 @@ public final class MtsdfFont {
     }
 
     private record TextState(Matrix3x2fc pose, TextureSetup textureSetup, ScreenRectangle scissorArea,
-                             ScreenRectangle bounds, String text, float x, float y, float size, int color)
+                             ScreenRectangle bounds, TextLayout layout, float x, float y, float size, int color)
             implements GuiElementRenderState {
         @Override
         public RenderPipeline pipeline() {
@@ -127,29 +165,20 @@ public final class MtsdfFont {
 
         @Override
         public void buildVertices(VertexConsumer vertices) {
-            float pen = x;
-            float baseline = y + FONT.baseline() * size;
-            for (int offset = 0; offset < text.length();) {
-                int codepoint = text.codePointAt(offset);
-                Glyph glyph = FONT.glyphs().getOrDefault(codepoint, FONT.glyphs().get((int) '?'));
-                if (glyph != null) {
-                    if (glyph.visible()) {
-                        float x0 = pen + glyph.left() * size;
-                        float y0 = baseline + glyph.top() * size;
-                        float x1 = pen + glyph.right() * size;
-                        float y1 = baseline + glyph.bottom() * size;
-                        float u0 = glyph.u0() / FONT.atlasWidth();
-                        float v0 = glyph.v0() / FONT.atlasHeight();
-                        float u1 = glyph.u1() / FONT.atlasWidth();
-                        float v1 = glyph.v1() / FONT.atlasHeight();
-                        vertices.addVertexWith2DPose(pose, x0, y0).setUv(u0, v0).setColor(color);
-                        vertices.addVertexWith2DPose(pose, x0, y1).setUv(u0, v1).setColor(color);
-                        vertices.addVertexWith2DPose(pose, x1, y1).setUv(u1, v1).setColor(color);
-                        vertices.addVertexWith2DPose(pose, x1, y0).setUv(u1, v0).setColor(color);
-                    }
-                    pen += glyph.advance() * size;
-                }
-                offset += Character.charCount(codepoint);
+            float[] quads = layout.quads();
+            for (int i = 0; i < quads.length; i += 8) {
+                float x0 = x + quads[i] * size;
+                float y0 = y + quads[i + 1] * size;
+                float x1 = x + quads[i + 2] * size;
+                float y1 = y + quads[i + 3] * size;
+                float u0 = quads[i + 4];
+                float v0 = quads[i + 5];
+                float u1 = quads[i + 6];
+                float v1 = quads[i + 7];
+                vertices.addVertexWith2DPose(pose, x0, y0).setUv(u0, v0).setColor(color);
+                vertices.addVertexWith2DPose(pose, x0, y1).setUv(u0, v1).setColor(color);
+                vertices.addVertexWith2DPose(pose, x1, y1).setUv(u1, v1).setColor(color);
+                vertices.addVertexWith2DPose(pose, x1, y0).setUv(u1, v0).setColor(color);
             }
         }
     }

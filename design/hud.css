@@ -1,0 +1,30 @@
+@font-face{font-family:Comfortaa;src:url('assets/Comfortaa-Regular.ttf') format('truetype');font-weight:400;font-display:swap}
+@font-face{font-family:Montserrat;src:url('assets/Montserrat-SemiBold.ttf') format('truetype');font-weight:600;font-display:swap}
+@font-face{font-family:Montserrat;src:url('assets/Montserrat-Regular.ttf') format('truetype');font-weight:400;font-display:swap}
+:root{color-scheme:dark;font-family:Comfortaa,sans-serif;font-synthesis:none;color:#fff;--glass:rgba(8,8,8,.62);--muted:rgba(255,255,255,.5)}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:#121212}
+.world{min-height:100svh;background:url('assets/hud-world.png') center/cover no-repeat}
+.watermark{position:fixed;top:0;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:13px;height:44px;padding:0 15px 0 11px;border-radius:0 0 13px 13px;background:var(--glass);backdrop-filter:blur(28px) grayscale(1) brightness(.48);-webkit-backdrop-filter:blur(28px) grayscale(1) brightness(.48);box-shadow:0 6px 20px #00000052,0 1px 4px #00000033,inset 0 -1px 0 #ffffff08;white-space:nowrap}
+.brand{display:flex;align-items:center;gap:8px;font-size:15px;line-height:1}
+.logo{display:block;width:28px;height:28px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px #408cff26}
+.divider{width:1px;height:15px;background:#ffffff12}
+.metric{display:flex;align-items:center;gap:6px;line-height:1}
+.metric svg{width:15px;height:15px;fill:none;stroke:#ffffff94;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round;margin-right:1px}
+.value{font-family:Montserrat,sans-serif;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.unit{font-size:10px;color:var(--muted)}
+@media(max-width:380px){.watermark{gap:9px;padding-right:11px}.brand{font-size:14px;gap:6px}.metric{gap:4px}.metric svg{width:14px;height:14px}.logo{width:25px;height:25px}}
+.potions{position:fixed;left:24px;top:38vh;width:210px;border-radius:10px;background:var(--glass);backdrop-filter:blur(28px) grayscale(1) brightness(.48);-webkit-backdrop-filter:blur(28px) grayscale(1) brightness(.48);box-shadow:0 6px 20px #00000052,0 1px 4px #00000033,inset 0 0 0 1px #ffffff05;overflow:hidden}
+.potions-header{height:30px;display:flex;align-items:center;gap:7px;padding:0 11px;border-bottom:1px solid #ffffff0f}
+.potions-header svg{width:14px;height:14px;fill:none;stroke:#fff;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
+.potions-header h1{margin:0;font-size:12px;line-height:18px;font-weight:400}
+.effect-list{list-style:none;margin:0;padding:5px;display:flex;flex-direction:column;gap:2px}
+.effect{display:flex;align-items:center;gap:7px;height:26px;padding:0 6px;border-radius:6px;transition:background .18s ease}
+.effect:hover{background:#ffffff06}
+.effect img{display:block;flex-shrink:0;width:16px;height:16px;image-rendering:pixelated}
+.effect-name{font-family:Montserrat,sans-serif;font-weight:400;font-size:11px;line-height:16px;white-space:nowrap}
+.effect-level{margin-left:3px;font-family:Comfortaa,sans-serif;font-size:10px;color:#ffffff80}
+.effect-time{margin-left:auto;flex-shrink:0;display:grid;place-items:center;min-width:34px;height:18px;padding:0 4px;border:1px solid #ffffff14;border-radius:5px;background:#ffffff07;font-family:Montserrat,sans-serif;font-size:10px;font-weight:600;font-variant-numeric:tabular-nums;color:#ffffffe0}
+.effect-time.expiring{color:#edba7c;border-color:#edba7c24;background:#edba7c09}
+@media(max-width:380px){.potions{left:12px;top:32vh}}
+@media(prefers-reduced-motion:reduce){.effect{transition:none}}

@@ -31,3 +31,27 @@ java {
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
 }
+
+sourceSets {
+    crosshairChecks {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+}
+tasks.register('crosshairChecks', JavaExec) {
+    dependsOn crosshairChecksClasses
+    classpath = sourceSets.crosshairChecks.runtimeClasspath
+    mainClass = 'dev.stormvisuals.module.CrosshairChecks'
+}
+tasks.named('check') { dependsOn 'crosshairChecks' }
+
+tasks.register('configChecks', JavaExec) {
+    dependsOn crosshairChecksClasses
+    classpath = sourceSets.crosshairChecks.runtimeClasspath
+    mainClass = 'dev.stormvisuals.config.ConfigChecks'
+}
+tasks.named('check') { dependsOn 'configChecks' }
+
+
+
+

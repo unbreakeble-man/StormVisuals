@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.gui.render.state.GuiElementRenderState;
@@ -66,21 +67,26 @@ public final class RoundedRectRenderer {
         }
 
         Matrix3x2fc pose = new Matrix3x2f(graphics.pose());
-        int left = (int) Math.floor(rect.x());
-        int top = (int) Math.floor(rect.y());
-        int right = (int) Math.ceil(rect.x() + rect.width());
-        int bottom = (int) Math.ceil(rect.y() + rect.height());
+        var window = Minecraft.getInstance().getWindow();
+        float pixelsPerUnit = (float) Math.hypot(pose.m00(), pose.m01())
+                * window.getWidth() / Math.max(1, window.getGuiScaledWidth());
+        float padding = 1 / Math.max(0.001F, pixelsPerUnit);
+        int left = (int) Math.floor(rect.x() - padding);
+        int top = (int) Math.floor(rect.y() - padding);
+        int right = (int) Math.ceil(rect.x() + rect.width() + padding);
+        int bottom = (int) Math.ceil(rect.y() + rect.height() + padding);
         ScreenRectangle bounds = new ScreenRectangle(left, top, right - left, bottom - top)
                 .transformMaxBounds(pose);
         ScreenRectangle scissor = graphics.scissorStack.peek();
         if (scissor != null) {
             bounds = scissor.intersection(bounds);
         }
+        if (bounds == null) return;
 
-        graphics.guiRenderState.submitGuiElement(new RoundedRectState(pose, rect, scissor, bounds));
+        graphics.guiRenderState.submitGuiElement(new RoundedRectState(pose, rect, padding, scissor, bounds));
     }
 
-    private record RoundedRectState(Matrix3x2fc pose, Rectangle rect,
+    private record RoundedRectState(Matrix3x2fc pose, Rectangle rect, float padding,
                                     ScreenRectangle scissorArea, ScreenRectangle bounds)
             implements GuiElementRenderState {
         @Override
@@ -102,6 +108,11 @@ public final class RoundedRectRenderer {
             float xm = (x0 + x1) * 0.5f;
             float ym = (y0 + y1) * 0.5f;
 
+            if (rect.topLeft() == 0 && rect.topRight() == 0 && rect.bottomRight() == 0 && rect.bottomLeft() == 0) {
+                corner(vertices, x0, y0, x1, y1, 0, false, false);
+                return;
+            }
+
             corner(vertices, x0, y0, xm, ym, rect.topLeft(), false, false);
             corner(vertices, xm, y0, x1, ym, rect.topRight(), true, false);
             corner(vertices, xm, ym, x1, y1, rect.bottomRight(), true, true);
@@ -116,6 +127,15 @@ public final class RoundedRectRenderer {
             float u1 = radius == 0 ? 2 : (right ? 0 : (x1 - x0) / radius);
             float v0 = radius == 0 ? 2 : (bottom ? (y1 - y0) / radius : 0);
             float v1 = radius == 0 ? 2 : (bottom ? 0 : (y1 - y0) / radius);
+
+            // Leave room outside the silhouette for symmetric one-pixel edge coverage.
+            // Internal quarter seams remain exactly aligned and never overlap.
+            if (radius > 0) {
+                if (right) { x1 += padding; u1 -= padding / radius; }
+                else { x0 -= padding; u0 -= padding / radius; }
+                if (bottom) { y1 += padding; v1 -= padding / radius; }
+                else { y0 -= padding; v0 -= padding / radius; }
+            }
 
             vertices.addVertexWith2DPose(pose, x0, y0).setUv(u0, v0).setColor(rect.argb());
             vertices.addVertexWith2DPose(pose, x0, y1).setUv(u0, v1).setColor(rect.argb());

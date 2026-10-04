@@ -5,6 +5,7 @@
   "name": "StormVisuals",
   "description": "Useful client-side visuals for Minecraft servers.",
   "environment": "client",
+  "mixins": ["stormvisuals.mixins.json"],
   "entrypoints": {
     "client": ["dev.stormvisuals.StormVisualsClient"]
   },

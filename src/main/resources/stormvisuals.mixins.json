@@ -1,0 +1,22 @@
+{
+  "required": true,
+  "package": "dev.stormvisuals.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "CrosshairSwingMixin",
+    "CustomHandMixin",
+    "WatermarkTimeMixin",
+    "LightTextureMixin",
+    "FullbrightPipelineMixin",
+    "FullbrightRenderSystemMixin",
+    "FullbrightGameRendererMixin",
+    "RemovalsGameRendererMixin",
+    "RemovalsFireMixin",
+    "RemovalsGuiMixin",
+    "RemovalsFogMixin",
+    "RemovalsGrassMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

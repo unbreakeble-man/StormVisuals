@@ -16,8 +16,8 @@ void main() {
     // Each quarter of the rectangle receives inward coordinates in radius units.
     vec2 outside = max(vec2(1.0) - cornerUv, vec2(0.0));
     float distanceToEdge = length(outside) - 1.0;
-    float antialias = max(fwidth(distanceToEdge), 0.0001);
-    float coverage = 1.0 - smoothstep(-antialias, antialias, distanceToEdge);
+    float pixelWidth = max(length(vec2(dFdx(distanceToEdge), dFdy(distanceToEdge))), 0.0001);
+    float coverage = clamp(0.5 - distanceToEdge / pixelWidth, 0.0, 1.0);
 
     vec4 color = vertexColor * ColorModulator;
     color.a *= coverage;
