@@ -52,6 +52,123 @@ tasks.register('configChecks', JavaExec) {
 }
 tasks.named('check') { dependsOn 'configChecks' }
 
+tasks.register('utilsChecks', JavaExec) {
+    dependsOn crosshairChecksClasses
+    classpath = sourceSets.crosshairChecks.runtimeClasspath
+    mainClass = 'dev.stormvisuals.module.UtilsChecks'
+    workingDir = layout.buildDirectory.dir('utils-checks').get().asFile
+    doFirst { workingDir.mkdirs() }
+}
+tasks.named('check') { dependsOn 'utilsChecks' }
+
+// Development tools stay outside the published mod and need no extra libraries.
+sourceSets { devTools }
+
+loom.runs {
+    hotSwapClient {
+        inherit client
+        vmArg '-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:5006'
+        vmArg '-Dstormvisuals.hotSwap=true'
+        ideConfigGenerated false
+    }
+}
+
+def hotSwapState = layout.buildDirectory.dir('hotswap/applied')
+tasks.register('prepareHotSwap', Sync) {
+    dependsOn classes
+    from(sourceSets.main.output.classesDirs) { into 'classes' }
+    from(sourceSets.main.output.resourcesDir) { into 'resources' }
+    into hotSwapState
+    outputs.upToDateWhen { false }
+    doFirst {
+        // Do not overwrite the baseline of an already running client.
+        try (def socket = new java.net.ServerSocket()) {
+            socket.bind(new java.net.InetSocketAddress('127.0.0.1', 5006))
+        } catch (java.io.IOException error) {
+            throw new GradleException('HotSwap port 5006 is busy. Close the previous development client.', error)
+        }
+    }
+}
+// A project-local Java 21 runtime with DCEVM; JAVA_HOME and ordinary builds stay unchanged.
+def hotSwapRuntimeName = 'jbr-21.0.11-windows-x64-b1163.116'
+def hotSwapJava = layout.projectDirectory.file(".gradle/hotswap/${hotSwapRuntimeName}/bin/java.exe")
+def hotSwapChecksum = '69cc76cc74be812e940f08fb7d54f58d9b688c21c28a6728da98e13b4a3226a9da240b2ec0e6fa90e123501d02beb6c4a7835b855fce35f5cd5384953d40f4a9'
+tasks.register('setupHotSwapRuntime') {
+    group = 'fabric'
+    description = 'Installs the pinned JetBrains Runtime 21 in the project cache for enhanced HotSwap.'
+    inputs.property 'sha512', hotSwapChecksum
+    outputs.dir hotSwapJava.asFile.parentFile.parentFile
+    doLast {
+        if (!System.getProperty('os.name').startsWith('Windows') || System.getProperty('os.arch') != 'amd64') {
+            throw new GradleException('The bundled HotSwap runtime currently supports Windows x64.')
+        }
+        def archive = layout.projectDirectory.file(".gradle/hotswap/downloads/${hotSwapRuntimeName}.zip").asFile
+        def digest = { file ->
+            def hash = java.security.MessageDigest.getInstance('SHA-512')
+            file.withInputStream { input ->
+                byte[] buffer = new byte[65536]
+                for (int count; (count = input.read(buffer)) != -1;) hash.update(buffer, 0, count)
+            }
+            hash.digest().encodeHex().toString()
+        }
+        if (!archive.isFile() || digest(archive) != hotSwapChecksum) {
+            if (gradle.startParameter.offline) throw new GradleException('Run setupHotSwapRuntime once without --offline to download JBR 21.')
+            archive.parentFile.mkdirs()
+            logger.lifecycle('Downloading JetBrains Runtime 21 for enhanced HotSwap (project cache only).')
+            def connection = URI.create("https://cache-redirector.jetbrains.com/intellij-jbr/${hotSwapRuntimeName}.zip").toURL().openConnection()
+            connection.connectTimeout = 15000
+            connection.readTimeout = 120000
+            connection.inputStream.withCloseable { input -> archive.withOutputStream { output -> output << input } }
+        }
+        if (digest(archive) != hotSwapChecksum) throw new GradleException('JetBrains Runtime SHA-512 verification failed; archive was not installed.')
+        copy {
+            from zipTree(archive)
+            into layout.projectDirectory.dir('.gradle/hotswap')
+        }
+        if (!hotSwapJava.asFile.isFile()) throw new GradleException('JetBrains Runtime archive did not contain bin/java.exe.')
+    }
+}
+tasks.named('runHotSwapClient') {
+    dependsOn 'prepareHotSwap', 'setupHotSwapRuntime'
+    executable = hotSwapJava.asFile.absolutePath
+    jvmArgs '-XX:+AllowEnhancedClassRedefinition'
+}
+
+tasks.register('reloadCode', JavaExec) {
+    group = 'fabric'
+    description = 'Compiles and applies method changes to the running HotSwap client.'
+    dependsOn classes, devToolsClasses
+    classpath = sourceSets.devTools.runtimeClasspath
+    mainClass = 'dev.stormvisuals.tools.HotSwap'
+    jvmArgs '--add-modules=jdk.jdi'
+    args sourceSets.main.output.classesDirs.singleFile.absolutePath,
+            sourceSets.main.output.resourcesDir.absolutePath,
+            hotSwapState.get().asFile.absolutePath, '5006'
+}
+
+tasks.register('hotSwapChecks', JavaExec) {
+    dependsOn devToolsClasses
+    classpath = sourceSets.devTools.runtimeClasspath
+    mainClass = 'dev.stormvisuals.tools.HotSwapChecks'
+    jvmArgs '--add-modules=jdk.jdi'
+    workingDir = layout.buildDirectory.dir('hotswap-checks').get().asFile
+    doFirst { workingDir.mkdirs() }
+}
+tasks.named('check') { dependsOn 'hotSwapChecks' }
+
+tasks.register('hotSwapEnhancedChecks', JavaExec) {
+    group = 'verification'
+    description = 'Checks structural HotSwap changes on the same JBR 21 used by the development client.'
+    dependsOn devToolsClasses, setupHotSwapRuntime
+    classpath = sourceSets.devTools.runtimeClasspath
+    mainClass = 'dev.stormvisuals.tools.HotSwapChecks'
+    jvmArgs '--add-modules=jdk.jdi'
+    systemProperty 'stormvisuals.testJava', hotSwapJava.asFile.absolutePath
+    systemProperty 'stormvisuals.enhancedChecks', 'true'
+    workingDir = layout.buildDirectory.dir('hotswap-enhanced-checks').get().asFile
+    doFirst { workingDir.mkdirs() }
+}
+
 
 
 

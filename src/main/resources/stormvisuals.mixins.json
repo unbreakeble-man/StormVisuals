@@ -4,6 +4,12 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "CrosshairSwingMixin",
+    "FuntimeQuestItemMixin",
+    "FuntimeQuestEntityMixin",
+    "FuntimeFishingHookAccessor",
+    "FuntimeQuestPickupMixin",
+    "FuntimeQuestClickMixin",
+    "FuntimeQuestInventoryMixin",
     "CustomHandMixin",
     "WatermarkTimeMixin",
     "LightTextureMixin",
@@ -14,7 +20,14 @@
     "RemovalsFireMixin",
     "RemovalsGuiMixin",
     "RemovalsFogMixin",
-    "RemovalsGrassMixin"
+    "RemovalsGrassMixin",
+    "ZoomMixin",
+    "ZoomScrollMixin",
+    "ContainerScreenAccessor",
+    "AuctionScreenMixin",
+    "ItemCooldownsAccessor",
+    "CooldownInstanceAccessor",
+    "OfflineSessionMixin"
   ],
   "injectors": {
     "defaultRequire": 1

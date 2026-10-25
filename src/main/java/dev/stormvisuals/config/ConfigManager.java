@@ -97,6 +97,10 @@ public final class ConfigManager {
         state.targetColor = TargetESP.color();
         state.watermark = HudDragging.WATERMARK.snapshot();
         state.potions = HudDragging.POTIONS.snapshot();
+        state.cooldowns = HudDragging.COOLDOWNS.snapshot();
+        state.hotkeys = HudDragging.HOTKEYS.snapshot();
+        state.quests = HudDragging.QUESTS.snapshot();
+        state.auctionTimer = HudDragging.AUCTION_TIMER.snapshot();
         return state;
     }
 
@@ -109,6 +113,10 @@ public final class ConfigManager {
             CustomCrosshair.applySettings(state.crosshair);
             HudDragging.WATERMARK.restore(state.watermark);
             HudDragging.POTIONS.restore(state.potions);
+            HudDragging.COOLDOWNS.restore(state.cooldowns);
+            HudDragging.HOTKEYS.restore(state.hotkeys);
+            HudDragging.QUESTS.restore(state.quests);
+            HudDragging.AUCTION_TIMER.restore(state.auctionTimer);
             ClickGuiScreen.applyConfig(state);
         } finally { applying = false; }
     }
@@ -160,6 +168,28 @@ public final class ConfigManager {
 
     public static void openFolder(Consumer<Result> done) {
         submit(() -> { Files.createDirectories(STORE.directory()); Util.getPlatform().openPath(STORE.directory()); return null; }, done);
+    }
+
+    public record AccountsResult(AccountsState state, String error) {}
+    public static void readAccounts(Consumer<AccountsResult> done) {
+        IO.execute(() -> {
+            AccountsResult result;
+            try { result = new AccountsResult(STORE.readAccounts(), null); }
+            catch (Exception error) { result = new AccountsResult(null, message(error)); }
+            AccountsResult completed = result;
+            Minecraft.getInstance().execute(() -> done.accept(completed));
+        });
+    }
+
+    public static void saveAccounts(AccountsState state, Consumer<String> done) {
+        AccountsState snapshot = state.copy();
+        IO.execute(() -> {
+            String failure = null;
+            try { STORE.saveAccounts(snapshot); }
+            catch (Exception error) { failure = message(error); }
+            String result = failure;
+            Minecraft.getInstance().execute(() -> done.accept(result));
+        });
     }
 
     private static String message(Exception error) {

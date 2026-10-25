@@ -16,6 +16,9 @@ public final class ConfigState {
     public int removals;
     public int targets = 2, targetStyle, targetColor = 0xFF1F6E;
     public Position watermark = new Position(), potions = new Position();
+    public Position cooldowns = new Position(), hotkeys = new Position();
+    public Position quests = new Position();
+    public Position auctionTimer = new Position();
 
     public static final class ModuleState {
         public boolean enabled, expanded;
@@ -25,6 +28,12 @@ public final class ConfigState {
         public boolean bothHands = true;
         public float handSpeed = 1, handOpacity = 50;
         public String key;
+        public float zoomStrength = 4, zoomSpeed = 12, tntDistance = 32;
+        public boolean hideZero;
+        public int chestSortMode;
+        public boolean auctionAutoRelist, auctionSortPrice, auctionShowTimer;
+        public int protectedCommands = 127;
+        public int questDifficulties = 7;
 
         public void validate() {
             effectIndex = Math.clamp(effectIndex, 0, 4);
@@ -33,16 +42,31 @@ public final class ConfigState {
             lightRadius = CrosshairSettings.limit(lightRadius, 0, 10, 10);
             handSpeed = CrosshairSettings.limit(handSpeed, 0, 5, 1);
             handOpacity = CrosshairSettings.limit(handOpacity, 0, 100, 50);
+            zoomStrength = CrosshairSettings.limit(zoomStrength, 1.5f, 10, 4);
+            zoomSpeed = CrosshairSettings.limit(zoomSpeed, 4, 24, 12);
+            tntDistance = CrosshairSettings.limit(tntDistance, 4, 96, 32);
+            chestSortMode = Math.clamp(chestSortMode, 0, 2);
+            protectedCommands &= 127;
+            questDifficulties &= 7;
             if (key != null && key.length() > 80) throw new IllegalArgumentException("Некорректная клавиша");
         }
     }
 
     public static final class Position {
         public boolean moved;
+        public boolean centerX, centerY;
         public float x, y;
+        public float scale = 1, cornerRadius = -1;
+        public List<String> favorites = new ArrayList<>();
         public void validate() {
             x = CrosshairSettings.limit(x, 0, 1, 0);
             y = CrosshairSettings.limit(y, 0, 1, 0);
+            scale = CrosshairSettings.limit(scale, .5f, 2.5f, 1);
+            cornerRadius = CrosshairSettings.limit(cornerRadius, -1, 22, -1);
+            if (favorites == null) favorites = new ArrayList<>();
+            if (favorites.size() > 256 || favorites.stream().anyMatch(key -> key == null || key.isBlank() || key.length() > 256))
+                throw new IllegalArgumentException("Некорректное избранное HUD");
+            favorites = new ArrayList<>(new java.util.LinkedHashSet<>(favorites));
         }
     }
 
@@ -69,5 +93,13 @@ public final class ConfigState {
         targetColor &= 0xFFFFFF;
         watermark.validate();
         potions.validate();
+        if (cooldowns == null) cooldowns = new Position();
+        if (hotkeys == null) hotkeys = new Position();
+        cooldowns.validate();
+        hotkeys.validate();
+        if (quests == null) quests = new Position();
+        quests.validate();
+        if (auctionTimer == null) auctionTimer = new Position();
+        auctionTimer.validate();
     }
 }

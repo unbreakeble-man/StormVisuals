@@ -29,6 +29,8 @@ final class CrosshairControls {
     }
     private final List<Row> rows=new ArrayList<>();
     private final Map<String,DropMotion> dropdowns=new HashMap<>();
+    private final Map<String,ClickGuiScreen.Motion> sliders=new HashMap<>();
+    private final Map<String,ClickGuiScreen.Motion> numberHover=new HashMap<>(),fieldHover=new HashMap<>();
     private static final Identifier ARROW=Identifier.fromNamespaceAndPath("stormvisuals","textures/gui/icons/dropdown.png");
     private static final class DropMotion {
         float value;
@@ -40,11 +42,13 @@ final class CrosshairControls {
     private Row dragging,field;
     private String expanded="", fieldKey="", text="";
     private boolean replaceText;
+    private boolean compact;
     private int dragPart;
     private float x,y,width,alpha=1,hue,saturation,value;
     CrosshairControls(Runnable before,Runnable after){this(before,after,CustomCrosshair::changed);}
     CrosshairControls(Runnable before,Runnable after,Runnable onChanged){this.before=before;this.after=after;this.onChanged=onChanged;}
     void clear(){rows.clear();}
+    void compact(){compact=true;}
     void number(String label,float min,float max,float step,Supplier<Float> getter,Consumer<Float> setter){
         Row r=row(label,Type.NUMBER);r.min=min;r.max=max;r.step=step;r.value=getter;r.setter=setter;
     }
@@ -81,7 +85,12 @@ final class CrosshairControls {
     float height(){float h=0;for(Row r:rows)h+=rowHeight(r);return h;}
     void position(float x,float y,float width){this.x=x;this.y=y;this.width=width;float top=y;for(Row r:rows){r.y=top;top+=rowHeight(r);}}
     private float choiceProgress(Row r){return dropdowns.computeIfAbsent(r.label,k->new DropMotion()).update(r.label.equals(expanded));}
-    private float rowHeight(Row r){return r.type==Type.NUMBER?48:r.type==Type.CHOICE?32+(4+r.options.length*26)*choiceProgress(r):r.type==Type.COLOR&&r.label.equals(expanded)?164:32;}
+    private float rowHeight(Row r){return r.type==Type.NUMBER?(compact?32:48):r.type==Type.CHOICE?32+(4+r.options.length*26)*choiceProgress(r):r.type==Type.COLOR&&r.label.equals(expanded)?164:32;}
+    boolean overOpenDropdown(float mx,float my){
+        for(Row r:rows)if(r.type==Type.CHOICE&&r.label.equals(expanded)&&mx>=x+width-148&&mx<x+width
+                &&my>=r.y+3&&my<r.y+27+(4+r.options.length*26)*choiceProgress(r))return true;
+        return false;
+    }
     void render(GuiGraphics g,float x,float y,float width,float mouseX,float mouseY,float alpha){
         position(x,y,width);this.alpha=alpha;
         float top=y;
@@ -89,18 +98,34 @@ final class CrosshairControls {
             r.y=top;
             if(r.type==Type.BUTTON){rect(g,x,top+2,width,26,6,0x38408CFF);label(g,r.label,x+8,top+10,11,0xFFFFFFFF);}
             else{
-                label(g,r.label,x,top+9,11,0xDDFFFFFF);
+                label(g,r.label,x,top+(compact?6:9),11,0xDDFFFFFF);
                 switch(r.type){
                     case TOGGLE->{boolean on=r.flag.get();rect(g,x+width-32,top+6,32,18,9,on?0xFF408CFF:0x30FFFFFF);rect(g,x+width-(on?16:29),top+9,12,12,6,0xFFFFFFFF);}
                     case NUMBER->{
-                        SliderValue.draw(g,fieldKey.equals(r.label)?text:format(r.value.get()),x+width,top+3,alpha);
-                        float progress=Math.clamp((r.value.get()-r.min)/(r.max-r.min),0,1);
-                        rect(g,x,top+35,width,3,1,0x30FFFFFF);if(progress>0)rect(g,x,top+35,width*progress,3,1,0xFF408CFF);
-                        rect(g,x+width*progress-4,top+32,9,9,4,0xFFFFFFFF);
+                        String valueText=fieldKey.equals(r.label)?text:format(r.value.get());
+                        float hover=0,fieldGlow=0;
+                        long now=System.nanoTime();
+                        if(compact){
+                            ClickGuiScreen.Motion over=numberHover.computeIfAbsent(r.label,k->new ClickGuiScreen.Motion(0,26));
+                            over.to(mouseX>=x&&mouseX<x+width&&mouseY>=top+22&&mouseY<top+32?1:0);
+                            hover=over.update(now);
+                            ClickGuiScreen.Motion focus=fieldHover.computeIfAbsent(r.label,k->new ClickGuiScreen.Motion(0,26));
+                            focus.to(fieldKey.equals(r.label)||mouseX>=x+width-SliderValue.width(valueText)&&mouseX<x+width&&mouseY>=top&&mouseY<top+24?1:0);
+                            fieldGlow=focus.update(now);
+                        }
+                        SliderValue.draw(g,valueText,x+width,top+(compact?0:3),alpha,fieldGlow);
+                        float target=Math.clamp((r.value.get()-r.min)/(r.max-r.min),0,1);
+                        ClickGuiScreen.Motion motion=sliders.computeIfAbsent(r.label,k->new ClickGuiScreen.Motion(target,32));
+                        motion.to(target);
+                        float progress=Math.clamp(motion.update(now),0,1);
+                        float trackY=top+(compact?26:35);
+                        rect(g,x,trackY,width,3,1,(48+Math.round(hover*32))<<24|0xFFFFFF);if(progress>0)rect(g,x,trackY,width*progress,3,1,0xFF408CFF);
+                        float knob=9+hover;
+                        rect(g,x+width*progress-4-hover/2,trackY-3-hover/2,knob,knob,4+hover/2,0xFFFFFFFF);
                     }
                     case CHOICE->{
                         float left=x+width-148,progress=choiceProgress(r),listHeight=(4+r.options.length*26)*progress;
-                        boolean over=mouseX>=left&&mouseX<left+148&&mouseY>=top+3&&mouseY<top+27;
+                        boolean over=!r.label.equals(expanded)&&progress<.001f&&mouseX>=left&&mouseX<left+148&&mouseY>=top+3&&mouseY<top+27;
                         // Same continuous, right-aligned dropdown as the existing Click GUI controls.
                         rect(g,left,top+3,148,24+listHeight,6,over?0xFF292A2D:0xFF202124);
                         label(g,r.options[r.selected.getAsInt()],left+9,top+10,11,0xFFFFFFFF);
@@ -152,8 +177,9 @@ final class CrosshairControls {
                 case BUTTON->r.action.run();
                 case TOGGLE->{before.run();r.toggle.accept(!r.flag.get());changed();after.run();}
                 case NUMBER->{
-                    if(local>=3 && local<3+SliderValue.HEIGHT && mx>=x+width-SliderValue.WIDTH){focus(r,format(r.value.get()));}
-                    else if(local>=28){before.run();dragging=r;dragPart=0;drag(mx,my);}
+                    int fieldTop=compact?0:3;
+                    if(local>=fieldTop && local<fieldTop+SliderValue.HEIGHT && mx>=x+width-SliderValue.width(format(r.value.get()))){focus(r,format(r.value.get()));}
+                    else if(local>=(compact?23:28)){before.run();dragging=r;dragPart=0;drag(mx,my);}
                 }
                 case CHOICE->{
                     if(mx<x+width-148)return true;
@@ -184,6 +210,7 @@ final class CrosshairControls {
     }
     boolean release(){if(dragging==null)return false;dragging=null;after.run();return true;}
     boolean busy(){return dragging!=null||field!=null;}
+    boolean dragging(){return dragging!=null;}
     boolean typing(){return field!=null;}
     private void focus(Row r,String initial){field=r;fieldKey=r.label;text=initial;replaceText=true;}
     void finish(){

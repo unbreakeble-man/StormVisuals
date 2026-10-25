@@ -71,6 +71,11 @@ public final class Keybinds {
     }
 
     public static List<Command> commands() { return VIEW; }
+    public static void updateFunctions(List<KeyMapping> bindings) {
+        functions = List.copyOf(bindings);
+        rememberFunctions();
+        revision++;
+    }
     public static String saveError() { return ConfigManager.autosaveError(); }
     public static long revision() { return revision; }
 

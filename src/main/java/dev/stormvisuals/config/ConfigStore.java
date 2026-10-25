@@ -76,6 +76,19 @@ public final class ConfigStore {
         atomicWrite(root.resolve("autosave.json"), contents.getBytes(StandardCharsets.UTF_8));
     }
 
+    public AccountsState readAccounts() throws IOException {
+        Path file = root.resolve("accounts.json");
+        AccountsState state = Files.exists(file) ? GSON.fromJson(readText(file), AccountsState.class) : new AccountsState();
+        if (state == null) throw new IllegalArgumentException("Пустой файл аккаунтов");
+        state.validate();
+        return state;
+    }
+
+    public void saveAccounts(AccountsState state) throws IOException {
+        state.validate();
+        atomicWrite(root.resolve("accounts.json"), GSON.toJson(state).getBytes(StandardCharsets.UTF_8));
+    }
+
     private static String readText(Path path) throws IOException {
         if (Files.size(path) > MAX_JSON) throw new IOException("Слишком большой конфиг");
         return Files.readString(path, StandardCharsets.UTF_8);

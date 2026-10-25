@@ -79,27 +79,32 @@ public final class WatermarkHud {
                 + fpsWidth + pingWidth + tpsWidth);
         float pixels = client.getMainRenderTarget().width / (float) graphics.guiWidth();
         // Match the compact HTML preview instead of growing with Minecraft GUI scale.
-        float scale = Math.min(1 / pixels, graphics.guiWidth() * 0.9F / width);
+        float scale = Math.min(HudDragging.WATERMARK.scale() / pixels, graphics.guiWidth() * 0.9F / width);
+        float radius = HudDragging.WATERMARK.radius(13);
         float x = (graphics.guiWidth() - width * scale) / 2;
         HudDragging.WATERMARK.layout(x, 0, width * scale, 44 * scale, graphics.guiWidth(), graphics.guiHeight());
         x = HudDragging.WATERMARK.x();
         float y = HudDragging.WATERMARK.y();
+        float topRadius = y <= 0 ? 0 : radius;
         BLUR.prepare(client.getMainRenderTarget(), x * pixels, y * pixels, width * scale * pixels, 44 * scale * pixels, now);
         graphics.pose().pushMatrix();
         graphics.pose().translate(x, y);
         graphics.pose().scale(scale, scale);
         for (int i = 8; i >= 1; i--) {
             float spread = i * 1.25F;
-            rect(graphics, -spread, 3 - spread, width + spread * 2, 44 + spread * 2, 0, 13 + spread, 0x03000000);
+            rect(graphics, -spread, 3 - spread, width + spread * 2, 44 + spread * 2, topRadius, radius + spread, 0x03000000);
         }
-        BLUR.draw(graphics, width, 44, 13, 1, true);
-        rect(graphics, 0, 0, width, 44, 0, 13, 0xC4000000);
+        BLUR.draw(graphics, width, 44, radius, 1, y <= 0);
+        rect(graphics, 0, 0, width, 44, topRadius, radius, 0xCC080A0C);
         PngIconRenderer.drawCircle(graphics, LOGO, 11, 8, 28, 0xFFFFFFFF);
         MtsdfFont.draw(graphics, "Storm", 47, 13, 15, 0xFFFFFFFF);
         float cursor = 47 + MtsdfFont.width("Storm", 15) + 13;
-        cursor = metric(graphics, cursor, FPS, fpsLabel, fpsWidth, "fps");
-        cursor = metric(graphics, cursor, PING, pingLabel, pingWidth, "ms");
-        metric(graphics, cursor, TPS, tpsLabel, tpsWidth, "tps");
+        for (int pass = 0; pass < 2; pass++) {
+            boolean favorite = pass == 0;
+            if (HudDragging.WATERMARK.favorite("fps") == favorite) cursor = metric(graphics, cursor, FPS, fpsLabel, fpsWidth, "fps");
+            if (HudDragging.WATERMARK.favorite("ping") == favorite) cursor = metric(graphics, cursor, PING, pingLabel, pingWidth, "ms");
+            if (HudDragging.WATERMARK.favorite("tps") == favorite) cursor = metric(graphics, cursor, TPS, tpsLabel, tpsWidth, "tps");
+        }
         graphics.pose().popMatrix();
     }
 
