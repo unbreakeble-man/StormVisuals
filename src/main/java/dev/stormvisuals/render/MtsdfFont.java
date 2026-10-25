@@ -29,7 +29,7 @@ import net.minecraft.resources.Identifier;
 import org.joml.Matrix3x2f;
 import org.joml.Matrix3x2fc;
 
-/** Comfortaa Latin text with Montserrat Cyrillic and numerals, packed into one MTSDF texture. */
+/** Montserrat Medium (500) for Latin, Cyrillic and numerals, packed into one MTSDF texture. */
 public final class MtsdfFont {
     private static final Identifier SHADER = Identifier.fromNamespaceAndPath("stormvisuals", "core/mtsdf_text");
     private static final RenderPipeline PIPELINE = RenderPipelines.register(
@@ -39,7 +39,7 @@ public final class MtsdfFont {
                     .withFragmentShader(SHADER)
                     .withVertexFormat(DefaultVertexFormat.POSITION_TEX_COLOR, VertexFormat.Mode.QUADS)
                     .build());
-    private static final FontFace FONT = loadFace("comfortaa_montserrat_mtsdf");
+    private static final FontFace FONT = loadFace("montserrat_medium_mtsdf");
     private static final Map<String, TextLayout> LAYOUTS = new LinkedHashMap<>(128, 0.75F, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, TextLayout> entry) { return size() > 512; }

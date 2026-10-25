@@ -20,6 +20,20 @@ public final class ConfigChecks {
         var hand = new ConfigState.ModuleState();
         hand.enabled = true; hand.bothHands = false; hand.handSpeed = 2.75f; hand.handOpacity = 64;
         state.modules.put("CustomHand", hand);
+        var utils = new ConfigState.ModuleState();
+        utils.enabled = true; utils.zoomStrength = 7.25f; utils.zoomSpeed = 19; utils.tntDistance = 64;
+        utils.hideZero = true; utils.chestSortMode = 2;
+        utils.protectedCommands = 38; utils.key = "key.keyboard.c";
+        state.modules.put("Zoom", utils);
+        var auction = new ConfigState.ModuleState();
+        auction.enabled = true; auction.auctionAutoRelist = true; auction.auctionSortPrice = true;
+        auction.auctionShowTimer = true;
+        state.modules.put("AucHelper", auction);
+        state.auctionTimer.moved = true; state.auctionTimer.x = .45f; state.auctionTimer.y = .72f;
+        var quests = new ConfigState.ModuleState();
+        quests.enabled = true; quests.questDifficulties = 5;
+        state.modules.put("Funtime Quests", quests);
+        state.quests.moved = true; state.quests.x = .2f; state.quests.y = .55f; state.quests.scale = 1.3f;
         state.crosshair.enabled = true; state.crosshair.style = CrosshairSettings.Style.CUSTOM;
         state.crosshair.hover = true; state.crosshair.dynamic = true;
         state.crosshair.elements.getFirst().x = -23.5f;
@@ -27,12 +41,33 @@ public final class ConfigChecks {
         state.crosshair.elements.getFirst().ownSettings = true;
         state.watermark.moved = true; state.watermark.x = .25f; state.watermark.y = .7f;
         state.potions.moved = true; state.potions.x = .81f; state.potions.y = .11f;
+        state.potions.centerX = true;
+        state.cooldowns.moved = true; state.cooldowns.x = .32f; state.cooldowns.y = .4f;
+        state.cooldowns.centerY = true;
+        state.hotkeys.moved = true; state.hotkeys.x = .6f; state.hotkeys.y = .65f;
+        state.watermark.scale = 1.2f; state.watermark.cornerRadius = 7; state.watermark.favorites.add("ping");
+        state.potions.scale = 1.5f; state.potions.cornerRadius = 14;
+        state.potions.favorites.addAll(java.util.List.of("minecraft:speed", "minecraft:strength"));
+        state.cooldowns.scale = .75f; state.cooldowns.cornerRadius = 0; state.cooldowns.favorites.add("minecraft:ender_pearl");
+        state.hotkeys.scale = 2; state.hotkeys.cornerRadius = 18; state.hotkeys.favorites.add("Zoom");
         state.removals = 21; state.targets = 11; state.targetStyle = 3; state.targetColor = 0xAA33CC;
         state.guiKey = "key.keyboard.right.shift";
         var command = new ConfigState.CommandBind(); command.command = "home"; command.key = "key.keyboard.h";
         state.commandBinds.add(command);
         String json = ConfigStore.encode(state);
         same(state, ConfigStore.decode(json), "Every setting round trips through compact JSON");
+        ConfigState oldHud = ConfigStore.decode("{\"version\":1,\"potions\":{\"moved\":true,\"x\":0.4,\"y\":0.3}}");
+        check(oldHud.potions.moved && !oldHud.potions.centerX && oldHud.cooldowns != null && oldHud.hotkeys != null,
+                "Old HUD positions load without new panels or snapping flags");
+        check(oldHud.potions.scale == 1 && oldHud.potions.cornerRadius == -1 && oldHud.potions.favorites.isEmpty(),
+                "Existing HUD configs retain their original appearance and no favorites");
+        check(oldHud.quests != null && new ConfigState.ModuleState().questDifficulties == 7,
+                "Old configs retain defaults for the quest HUD and all difficulties");
+        check(oldHud.auctionTimer != null && !new ConfigState.ModuleState().auctionShowTimer,
+                "Old configs keep the new auction timer hidden until explicitly enabled");
+        check(ConfigStore.decode("{\"version\":1,\"potions\":{\"scale\":99,\"cornerRadius\":99}}").potions.scale == 2.5f,
+                "HUD scale is bounded on import");
+        reject(() -> ConfigStore.decode("{\"version\":1,\"potions\":{\"favorites\":[null]}}"), "Invalid HUD favorites rejected");
         check(json.length() < new Gson().toJson(state).length(), "Default settings are omitted");
         check(ConfigStore.encode(new ConfigState()).equals("{\"version\":1}"), "Defaults occupy only the version field");
         store.saveAutosave(json);
@@ -76,6 +111,26 @@ public final class ConfigChecks {
         Files.writeString(legacyRoot.resolve("crosshair.json"), new Gson().toJson(state.crosshair));
         check(new ConfigStore(legacyRoot).readAutosave().crosshair.elements.getFirst().x == -23.5f, "Legacy custom crosshair is migrated");
         check(Files.exists(legacyRoot.resolve("crosshair.json")), "Legacy source is preserved");
+        AccountsState accounts = new AccountsState();
+        accounts.accounts.addAll(java.util.List.of("StormFox1234", "PixelSky5678"));
+        accounts.selected = "PixelSky5678";
+        store.saveAccounts(accounts);
+        check(new Gson().toJson(accounts).equals(new Gson().toJson(store.readAccounts())), "Offline accounts persist across store instances");
+        check(store.list().isEmpty(), "Accounts are separate from shareable presets");
+        reject(() -> AccountsState.nickname("bad name"), "Offline nickname syntax validated");
+        reject(() -> AccountsState.nickname("ab"), "Too short nicknames rejected");
+        reject(() -> AccountsState.nickname("a".repeat(17)), "Too long nicknames rejected");
+        accounts.accounts.add("stormfox1234");
+        reject(accounts::validate, "Offline duplicates rejected case-insensitively");
+        check(AccountsState.uuid("Notch").toString().equals("b50ad385-829d-3141-a216-7e7d7539ba7f"), "Offline UUID uses vanilla derivation");
+        int all = 127;
+        check(dev.stormvisuals.module.CommandRules.dangerous("/CLEAR @s", all), "Dangerous commands matched case-insensitively");
+        check(dev.stormvisuals.module.CommandRules.dangerous("essentials:suicide", all), "Namespaced aliases protected");
+        check(dev.stormvisuals.module.CommandRules.dangerous("execute as @s run minecraft:kill @s", all), "Execute wrappers protected");
+        check(dev.stormvisuals.module.CommandRules.dangerous("execute as @s run execute at @s run clear", all), "Nested execute protected");
+        check(!dev.stormvisuals.module.CommandRules.dangerous("clearweather", all), "Similar safe names not intercepted");
+        check(!dev.stormvisuals.module.CommandRules.dangerous("say clear", all), "Arguments are not treated as commands");
+        check(!dev.stormvisuals.module.CommandRules.dangerous("clear", all & ~2), "Individual command protection can be disabled");
         System.out.println("Config round-trip, compression, CRUD, import, migration and invalid-file checks passed (preset " + entry.bytes() + " bytes)");
     }
     private static void same(ConfigState expected, ConfigState actual, String message) {

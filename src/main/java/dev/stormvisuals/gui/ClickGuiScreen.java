@@ -11,6 +11,14 @@ import dev.stormvisuals.module.Removals;
 import dev.stormvisuals.module.CustomCrosshair;
 import dev.stormvisuals.module.CustomHand;
 import dev.stormvisuals.module.TargetESP;
+import dev.stormvisuals.module.Zoom;
+import dev.stormvisuals.module.ItemScroller;
+import dev.stormvisuals.module.TntTimer;
+import dev.stormvisuals.module.TotemBar;
+import dev.stormvisuals.module.ChestSorter;
+import dev.stormvisuals.module.CommandSafe;
+import dev.stormvisuals.module.Auction;
+import dev.stormvisuals.module.FuntimeQuests;
 import dev.stormvisuals.render.BackdropBlurRenderer;
 import dev.stormvisuals.render.PngIconRenderer;
 import dev.stormvisuals.render.RoundedRectRenderer;
@@ -51,7 +59,11 @@ public final class ClickGuiScreen extends Screen {
     private static final String[] GROUPS = {"Визуал", "Утилиты", "Прочее"};
     private static final String[] FULLBRIGHT_MODES = {"Яркость", "Эффект", "Динамическое"};
     private static final String[] EFFECTS = {"Огнестойкость", "Скорость", "Сила"};
-    private static final List<Module> MODULES = List.of(
+    private static final List<Module> MODULES = new ArrayList<>(createModules());
+
+    // This method body can grow through standard HotSwap without changing the class schema.
+    private static List<Module> createModules() {
+        return List.of(
             new Module("Эффекты", "P", "Показывает выбранный эффект", "Render", true, true),
             new Module("TargetESP", "R", "Подсветка цели под прицелом", "Render", false, false),
             new Module("Removals", "", "Скрывает мешающие эффекты", "Render", false, false),
@@ -59,8 +71,17 @@ public final class ClickGuiScreen extends Screen {
             new Module("FullBright", "", "Светлее в тёмных местах", "Render", false, false),
             new Module("CustomCrosshair", "", "Свой стиль прицела", "Render", false, false),
             new Module("CustomHand", "", "Водные волны на руке и предмете", "Render", false, false),
-            new Module("Точки маршрута", "M", "Ориентиры и расстояние", "World", false, false)
-    );
+            new Module("Точки маршрута", "M", "Ориентиры и расстояние", "World", false, false),
+            new Module("Zoom", "C", "Плавное приближение при удержании бинда", "Utils", false, false),
+            new Module("Item Scroller", "", "Shift + ЛКМ: быстрое перемещение предметов", "Utils", false, false),
+            new Module("TNT Timer", "", "Оценка времени до взрыва рядом с TNT", "Utils", false, false),
+            new Module("Totem Bar", "", "Количество тотемов над хотбаром", "Utils", false, false),
+            new Module("Chest Sorter", "", "Кнопка сортировки в интерфейсе сундука", "Utils", false, false),
+            new Module("AucHelper", "", "Перевыставление и сортировка аукциона по цене", "Utils", false, false),
+            new Module("Funtime Quests", "", "Квесты на *.funtime.su; локальный подсчёт со сверкой по серверу", "Utils", false, false),
+            new Module("Command Safe", "", "Подтверждение опасных команд", "Utils", false, false)
+        );
+    }
 
     private static KeyMapping openKey;
     private final BackdropBlurRenderer backdrop = new BackdropBlurRenderer();
@@ -115,8 +136,10 @@ public final class ClickGuiScreen extends Screen {
         icons.add(LOGO);
         icons.add(SEARCH);
         icons.add(DROPDOWN);
+        icons.add(HudSettingsScreen.CLOSE_ICON);
         icons.addAll(dev.stormvisuals.render.WatermarkHud.icons());
         icons.addAll(dev.stormvisuals.render.PotionsHud.icons());
+        icons.addAll(dev.stormvisuals.render.QuestsHud.icons());
         PngIconRenderer.initialize(List.copyOf(icons));
         openKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.stormvisuals.click_gui", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_RIGHT_SHIFT,
@@ -125,6 +148,7 @@ public final class ClickGuiScreen extends Screen {
             int defaultKey = module.key.isEmpty() ? GLFW.GLFW_KEY_UNKNOWN : module.key.charAt(0);
             module.binding = new PressKeyMapping(module.name, InputConstants.Type.KEYSYM, defaultKey, openKey.getCategory());
             KeyBindingHelper.registerKeyBinding(module.binding);
+            if (module.name.equals("Zoom")) Zoom.configure(module.enabled, module.binding);
         }
         List<KeyMapping> persistentBindings = new ArrayList<>();
         persistentBindings.add(openKey);
@@ -133,6 +157,7 @@ public final class ClickGuiScreen extends Screen {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             for (Module module : MODULES) {
                 int presses = module.binding.takePresses();
+                if (module.name.equals("Zoom")) continue;
                 for (int i = 0; i < presses; i++) {
                     if (client.screen == null && client.player != null && client.level != null && client.isWindowActive()) toggleModule(module);
                 }
@@ -145,6 +170,61 @@ public final class ClickGuiScreen extends Screen {
                 }
             }
         });
+    }
+
+    public static List<KeyMapping> activeHudBindings() {
+        return MODULES.stream().filter(module -> module.binding != null && !module.binding.isUnbound()
+                && (module.name.equals("Zoom") ? module.enabled && module.binding.isDown()
+                : module.crosshair ? CustomCrosshair.settings().enabled : module.enabled))
+                .map(module -> (KeyMapping) module.binding).toList();
+    }
+
+    /** Called between frames by LiveReload; existing modules, settings and bindings retain identity. */
+    public static int refreshModules() {
+        if (!dev.stormvisuals.dev.LiveReload.isApplying()) throw new IllegalStateException("Not applying a development reload");
+        List<Module> definitions = createModules();
+        if (definitions.size() > 64) throw new IllegalStateException("At most 64 modules are supported by the config format");
+        var names = new java.util.HashSet<String>();
+        for (Module definition : definitions) {
+            if (!names.add(definition.name)) throw new IllegalStateException("Duplicate module: " + definition.name);
+        }
+        long additions = definitions.stream().filter(definition -> MODULES.stream()
+                .noneMatch(existing -> existing.name.equals(definition.name))).count();
+        if (MODULES.size() + additions > 64) throw new IllegalStateException("At most 64 registered modules are supported; restart to remove old cards");
+        int added = 0;
+        for (Module definition : definitions) {
+            if (MODULES.stream().anyMatch(existing -> existing.name.equals(definition.name))) continue;
+            int defaultKey = definition.key.isEmpty() ? GLFW.GLFW_KEY_UNKNOWN : definition.key.charAt(0);
+            // Fabric forbids registering keys after Options construction. The vanilla constructor
+            // registers input dispatch; our own keybind panel and config handle this live binding.
+            definition.binding = new PressKeyMapping(definition.name, InputConstants.Type.KEYSYM, defaultKey, openKey.getCategory());
+            MODULES.add(definition);
+            configureUtility(definition);
+            added++;
+        }
+        if (added > 0) {
+            List<KeyMapping> bindings = new ArrayList<>();
+            bindings.add(openKey);
+            MODULES.forEach(module -> bindings.add(module.binding));
+            Keybinds.updateFunctions(bindings);
+            KeyMapping.resetMapping();
+            ConfigManager.changed();
+        }
+        var client = net.minecraft.client.Minecraft.getInstance();
+        if (client.screen instanceof ClickGuiScreen previous) {
+            ClickGuiScreen refreshed = new ClickGuiScreen();
+            refreshed.category = previous.category;
+            refreshed.selectedCategory = previous.selectedCategory;
+            refreshed.query = previous.query;
+            refreshed.queryWidth = previous.queryWidth;
+            client.setScreen(refreshed);
+        }
+        return added;
+    }
+
+    public static List<KeyMapping> hudBindings() {
+        return MODULES.stream().filter(module -> module.binding != null && !module.binding.isUnbound())
+                .map(module -> (KeyMapping) module.binding).toList();
     }
 
     @Override
@@ -277,7 +357,12 @@ public final class ClickGuiScreen extends Screen {
         float x = card.x;
         float y = card.y - scrolling.value;
         if (y + card.height < HEADER || y >= HEIGHT) return;
-        card.hover.to(!closing && pendingCategory == null && inside(mouseLocalX - (1 - Math.clamp(content.value, 0, 1)) * 10, mouseLocalY, x, y, CARD_WIDTH, card.height) ? 1 : 0);
+        float localMouseX = mouseLocalX - (1 - Math.clamp(content.value, 0, 1)) * 10;
+        boolean overDropdown = card.crosshairControls.overOpenDropdown(localMouseX, mouseLocalY)
+                || card.dropdownOpen && inside(localMouseX, mouseLocalY, x + CARD_WIDTH - 164, y + 80,
+                152, 28 + dropdownHeight(card));
+        card.hover.to(!closing && pendingCategory == null && !overDropdown
+                && inside(localMouseX, mouseLocalY, x, y, CARD_WIDTH, card.height) ? 1 : 0);
         float hover = card.hover.update(now);
         card.enabled.to(module.enabled ? 1 : 0);
         float enabled = card.enabled.update(now);
@@ -287,12 +372,12 @@ public final class ClickGuiScreen extends Screen {
         if (keybinds.isBinding(module.binding) || !module.binding.isUnbound()) label(graphics, keybinds.isBinding(module.binding) ? "[...]" : module.keyLabel, x + 12 + module.nameWidth + 8, y + 19, 12, MUTED);
         drawSwitch(graphics, x + CARD_WIDTH - 46, y + 14, enabled);
         label(graphics, module.description, x + 12, y + 41, 12, MUTED);
-        if (card.expansion.value < 0.002F) return;
+        if (card.expansion.value < 0.002F || module.utility && card.crosshairControls.height() == 0) return;
         graphics.enableScissor((int) x, (int) (y + 70), (int) (x + CARD_WIDTH), (int) Math.ceil(y + card.height));
         float previousAlpha = renderAlpha;
         renderAlpha *= Math.clamp(card.expansion.value * 2, 0, 1);
         fill(graphics, x + 12, y + 70, x + CARD_WIDTH - 12, y + 71, 0x12FFFFFF);
-        if (module.crosshair || module.customHand) {
+        if (module.crosshair || module.customHand || module.utility) {
             card.crosshairControls.render(graphics,x+12,y+80,CARD_WIDTH-24,
                     mouseLocalX,mouseLocalY,renderAlpha);
             renderAlpha=previousAlpha;
@@ -342,7 +427,8 @@ public final class ClickGuiScreen extends Screen {
         label(graphics, brightness ? "Сила яркости" : "Дальность свечения", x + 12, y + 124, 12, 0xCCFFFFFF);
         drawSliderValue(graphics, card.lightValueLabel, x + CARD_WIDTH - 12, y + 124);
         float value = brightness ? card.module.brightness : card.module.lightRadius / 10;
-        float filled = (CARD_WIDTH - 24) * value;
+        card.light.to(value);
+        float filled = (CARD_WIDTH - 24) * Math.clamp(card.light.update(now), 0, 1);
         rect(graphics, x + 12, y + 150, CARD_WIDTH - 24, 4, 2, 0x22FFFFFF);
         if (filled > 0) rect(graphics, x + 12, y + 150, filled, 4, 2, BLUE);
         rect(graphics, x + 7 + filled, y + 146, 12, 12, 6, WHITE);
@@ -357,10 +443,10 @@ public final class ClickGuiScreen extends Screen {
         String[] options = dropdownOptions(card.module);
         float listHeight = (4 + options.length * 28) * progress;
         float mouseX = mouseLocalX - (1 - Math.clamp(content.value, 0, 1)) * 10;
-        card.dropdownHover.to(inside(mouseX, mouseLocalY, listX, y + 80, 152, 28) ? 1 : 0);
+        card.dropdownHover.to(!card.dropdownOpen && progress < .001F && inside(mouseX, mouseLocalY, listX, y + 80, 152, 28) ? 1 : 0);
         // One continuous shape grows downward while later settings move by the same amount.
         rect(graphics, listX, y + 80, 152, 28 + listHeight, 6,
-                mix(0xFF202124, 0xFF292A2D, card.dropdownHover.update(now)));
+                mix(0xFF202124, 0xFF292A2D, card.dropdownOpen || progress > .001F ? 0 : card.dropdownHover.update(now)));
         label(graphics, card.module.targetEsp ? TargetESP.selectionLabel() : card.module.removals ? card.module.removalLabel : options[card.module.effectIndex], listX + 9, y + 88, 11, WHITE);
         PngIconRenderer.draw(graphics, DROPDOWN, (int) listX + 135, (int) y + 87, 14, color(MUTED));
         if (listHeight < 0.1F) return;
@@ -398,7 +484,22 @@ public final class ClickGuiScreen extends Screen {
         if (module.removals) Removals.setEnabled(module.enabled);
         if (module.targetEsp) TargetESP.configure(module.enabled);
         if (module.customHand) CustomHand.setEnabled(module.enabled);
+        configureUtility(module);
         ConfigManager.changed();
+    }
+
+    private static void configureUtility(Module module) {
+        switch (module.name) {
+            case "Zoom" -> Zoom.configure(module.enabled, module.binding);
+            case "Item Scroller" -> ItemScroller.setEnabled(module.enabled);
+            case "TNT Timer" -> TntTimer.setEnabled(module.enabled);
+            case "Totem Bar" -> TotemBar.setEnabled(module.enabled);
+            case "Chest Sorter" -> ChestSorter.setEnabled(module.enabled);
+            case "AucHelper" -> Auction.setEnabled(module.enabled);
+            case "Funtime Quests" -> FuntimeQuests.setEnabled(module.enabled);
+            case "Command Safe" -> CommandSafe.setEnabled(module.enabled);
+            default -> { }
+        }
     }
 
     private static String[] dropdownOptions(Module module) {
@@ -443,7 +544,7 @@ public final class ClickGuiScreen extends Screen {
             card.expansion.to(card.module.expanded ? 1 : 0);
             card.dropdown.to(card.dropdownOpen && card.module.expanded ? 1 : 0);
             card.dropdown.update(now);
-            card.height = 70 + (((card.module.crosshair || card.module.customHand) ? card.crosshairControls.height()+18 : card.module.removals ? 42 : card.module.targetEsp ? 94 + card.crosshairControls.height() : card.module.fullbright ? (card.module.effectIndex == 1 ? 50 : 100) : card.module.effects ? 176 : 72) + dropdownHeight(card)) * Math.clamp(card.expansion.update(now), 0, 1);
+            card.height = 70 + (((card.module.crosshair || card.module.customHand || card.module.utility) ? card.crosshairControls.height() + (card.module.utility && card.crosshairControls.height() == 0 ? 0 : 18) : card.module.removals ? 42 : card.module.targetEsp ? 94 + card.crosshairControls.height() : card.module.fullbright ? (card.module.effectIndex == 1 ? 50 : 100) : card.module.effects ? 176 : 72) + dropdownHeight(card)) * Math.clamp(card.expansion.update(now), 0, 1);
             card.y = i % 2 == 0 ? leftY : rightY;
             if (i % 2 == 0) leftY += card.height + CARD_GAP;
             else rightY += card.height + CARD_GAP;
@@ -508,7 +609,7 @@ public final class ClickGuiScreen extends Screen {
         float contentOffset = (1 - Math.clamp(content.value, 0, 1)) * 10;
         if (category.equals("Configs") && configs.modalOpen())
             return configs.click(x - contentOffset, y, event.button());
-        for(Card card:allCards)if((card.module.crosshair || card.module.targetEsp || card.module.customHand) && (!cards.contains(card)
+        for(Card card:allCards)if((card.module.crosshair || card.module.targetEsp || card.module.customHand || card.module.utility) && (!cards.contains(card)
                 || !inside(x-contentOffset,y,card.x,card.y-scrolling.value+70,CARD_WIDTH,card.height-70)))card.crosshairControls.cancel();
         for (Card card : allCards) {
             if (card.dropdownOpen && (!cards.contains(card) || !inside(x - contentOffset, y,
@@ -539,7 +640,7 @@ public final class ClickGuiScreen extends Screen {
             if (!inside(x, y, card.x, cardY, CARD_WIDTH, card.height)) continue;
             Module module = card.module;
             float relativeY = y - cardY;
-            if((module.crosshair || module.customHand) && module.expanded && card.expansion.value>.95F && relativeY>=70) {
+            if((module.crosshair || module.customHand || module.utility) && module.expanded && card.expansion.value>.95F && relativeY>=70) {
                 card.crosshairControls.position(card.x+12,cardY+80,CARD_WIDTH-24);
                 card.crosshairControls.click(x,y,event.button());
                 return true;
@@ -642,7 +743,7 @@ public final class ClickGuiScreen extends Screen {
             updateDimensions(System.nanoTime());
             float x=(float)((event.x()-drawX)/drawScale)-(1-Math.clamp(content.value,0,1))*10;
             float y=(float)((event.y()-drawY)/drawScale);
-            for(Card card:allCards)if((card.module.crosshair || card.module.customHand) && card.crosshairControls.drag(x,y))return true;
+            for(Card card:allCards)if((card.module.crosshair || card.module.customHand || card.module.utility) && card.crosshairControls.drag(x,y))return true;
         }
         if (draggingScale == null || closing) return false;
         updateDimensions(System.nanoTime());
@@ -709,14 +810,14 @@ public final class ClickGuiScreen extends Screen {
             if (keybinds.key(event)) return true;
         }
         if (event.isEscape()) {
-            for(Card card:cards)if((card.module.crosshair || card.module.targetEsp) && card.crosshairControls.closePopup())return true;
+            for(Card card:cards)if((card.module.crosshair || card.module.targetEsp || card.module.customHand || card.module.utility) && card.crosshairControls.closePopup())return true;
             for (Card card : allCards) {
                 if (card.dropdownOpen) { card.dropdownOpen = false; return true; }
             }
         }
         if (event.isEscape() || openKey.matches(event)) { onClose(); return true; }
         if (closing) return true;
-        for(Card card:cards)if((card.module.crosshair || card.module.customHand) && card.module.expanded && card.crosshairControls.key(event))return true;
+        for(Card card:cards)if((card.module.crosshair || card.module.customHand || card.module.utility) && card.module.expanded && card.crosshairControls.key(event))return true;
         if (!searchFocused) return super.keyPressed(event);
         if (event.key() == GLFW.GLFW_KEY_ENTER) { searchFocused = false; return true; }
         if (event.key() == GLFW.GLFW_KEY_BACKSPACE && !query.isEmpty()) {
@@ -735,7 +836,7 @@ public final class ClickGuiScreen extends Screen {
         if (keybinds.isBinding() || category.equals("Keybinds") && !searchFocused) {
             if (keybinds.character(event)) return true;
         }
-        for(Card card:cards)if((card.module.crosshair || card.module.customHand) && card.module.expanded && card.crosshairControls.character(event))return true;
+        for(Card card:cards)if((card.module.crosshair || card.module.customHand || card.module.utility) && card.module.expanded && card.crosshairControls.character(event))return true;
         if (!searchFocused || closing) return false;
         if (event.isAllowedChatCharacter() && query.codePointCount(0, query.length()) < 32) {
             query += event.codepointAsString();
@@ -775,6 +876,16 @@ public final class ClickGuiScreen extends Screen {
                 saved.handOpacity = CustomHand.opacity();
             }
             saved.key = module.binding.saveString();
+            switch (module.name) {
+                case "Zoom" -> Zoom.capture(saved);
+                case "Chest Sorter" -> ChestSorter.capture(saved);
+                case "AucHelper" -> Auction.capture(saved);
+                case "Funtime Quests" -> FuntimeQuests.capture(saved);
+                case "TNT Timer" -> TntTimer.capture(saved);
+                case "Totem Bar" -> TotemBar.capture(saved);
+                case "Command Safe" -> CommandSafe.capture(saved);
+                default -> { }
+            }
             state.modules.put(module.name, saved);
         }
     }
@@ -789,6 +900,7 @@ public final class ClickGuiScreen extends Screen {
     public static void applyConfig(ConfigState state) {
         for (Module module : MODULES) {
             ConfigState.ModuleState saved = state.modules.get(module.name);
+            if (saved == null && module.name.equals("AucHelper")) saved = state.modules.get("Auction");
             if (saved == null) {
                 saved = new ConfigState.ModuleState();
                 saved.enabled = module.defaultEnabled;
@@ -804,6 +916,17 @@ public final class ClickGuiScreen extends Screen {
             module.lightRadius = saved.lightRadius;
             if (saved.key != null) module.binding.setKey(InputConstants.getKey(saved.key));
             module.refreshKeyLabel();
+            switch (module.name) {
+                case "Zoom" -> Zoom.restore(saved);
+                case "Chest Sorter" -> ChestSorter.restore(saved);
+                case "AucHelper" -> Auction.restore(saved);
+                case "Funtime Quests" -> FuntimeQuests.restore(saved);
+                case "TNT Timer" -> TntTimer.restore(saved);
+                case "Totem Bar" -> TotemBar.restore(saved);
+                case "Command Safe" -> CommandSafe.restore(saved);
+                default -> { }
+            }
+            configureUtility(module);
             if (module.fullbright) {
                 Fullbright.setBrightness(module.brightness);
                 Fullbright.setRadius(module.lightRadius);
@@ -829,7 +952,7 @@ public final class ClickGuiScreen extends Screen {
     private void refreshConfigCards() {
         draggingScale = null;
         keybinds.blur();
-        for (int i = 0; i < MODULES.size(); i++) allCards[i] = new Card(MODULES.get(i));
+        for (int i = 0; i < allCards.length; i++) allCards[i] = new Card(MODULES.get(i));
         filterDirty = true;
     }
 
@@ -879,6 +1002,7 @@ public final class ClickGuiScreen extends Screen {
         final Motion timer;
         final Motion hide;
         final Motion size;
+        final Motion light;
         final Motion hover = new Motion(0, 24);
         final Motion dropdown = new Motion(0, 26);
         final Motion dropdownHover = new Motion(0, 24);
@@ -893,7 +1017,35 @@ public final class ClickGuiScreen extends Screen {
 
         Card(Module module) {
             this.module = module;
-            crosshairControls = new CrosshairControls(() -> {}, () -> {}, module.customHand ? ConfigManager::changed : module.targetEsp ? () -> {} : CustomCrosshair::changed);
+            crosshairControls = new CrosshairControls(() -> {}, () -> {}, module.customHand || module.utility ? ConfigManager::changed : module.targetEsp ? () -> {} : CustomCrosshair::changed);
+            switch (module.name) {
+                case "Zoom" -> {
+                    crosshairControls.number("Сила приближения", 1.5f, 10, .25f, Zoom::strength, Zoom::strength);
+                    crosshairControls.number("Скорость перехода", 4, 24, 1, Zoom::speed, Zoom::speed);
+                }
+                case "TNT Timer" -> crosshairControls.number("Дистанция отображения", 4, 96, 1, TntTimer::distance, TntTimer::distance);
+                case "Totem Bar" -> crosshairControls.toggle("Скрывать при нуле", TotemBar::hideZero, TotemBar::hideZero);
+                case "Chest Sorter" -> crosshairControls.choice("Режим сортировки", ChestSorter.MODES, ChestSorter::mode, ChestSorter::mode);
+                case "AucHelper" -> {
+                    crosshairControls.toggle("Автоперевыставление", Auction::autoRelist, Auction::autoRelist);
+                    crosshairControls.toggle("Сортировка по цене", Auction::sortPrice, Auction::sortPrice);
+                    crosshairControls.toggle("Отображать таймер", Auction::showTimer, Auction::showTimer);
+                }
+                case "Command Safe" -> {
+                    for (int i = 0; i < CommandSafe.COMMANDS.length; i++) {
+                        final int index = i;
+                        crosshairControls.toggle("/" + CommandSafe.COMMANDS[i], () -> CommandSafe.protects(index), on -> CommandSafe.protect(index, on));
+                    }
+                }
+                case "Funtime Quests" -> {
+                    for (int i = 0; i < FuntimeQuests.DIFFICULTIES.length; i++) {
+                        final int difficulty = i;
+                        crosshairControls.toggle(FuntimeQuests.DIFFICULTIES[i], () -> FuntimeQuests.shows(difficulty),
+                                on -> FuntimeQuests.show(difficulty, on));
+                    }
+                }
+                default -> { }
+            }
             if (module.targetEsp) crosshairControls.choice("Стиль", TargetESP.STYLES, TargetESP::style, TargetESP::setStyle);
             if (module.customHand) {
                 crosshairControls.toggle("Обе руки", CustomHand::bothHands, CustomHand::setBothHands);
@@ -908,13 +1060,14 @@ public final class ClickGuiScreen extends Screen {
             timer = new Motion(module.showTimer ? 1 : 0, 26);
             hide = new Motion(module.hideWithoutEffect ? 1 : 0, 26);
             size = new Motion(module.size, 32);
+            light = new Motion(module.effectIndex == 0 ? module.brightness : module.lightRadius / 10, 32);
             sizeLabel = module.size + "%";
             sizeWidth = MtsdfFont.width(sizeLabel, 11);
         }
     }
 
     /** Exact critically damped spring: keeps velocity when reversed and is independent of FPS. */
-    private static final class Motion {
+    static final class Motion {
         float value;
         float target;
         double velocity;
@@ -941,6 +1094,7 @@ public final class ClickGuiScreen extends Screen {
     private static final class Module {
         final boolean crosshair;
         final boolean customHand;
+        final boolean utility;
         final String name;
         final String key;
         final String description;
@@ -972,6 +1126,7 @@ public final class ClickGuiScreen extends Screen {
         Module(String name, String key, String description, String category, boolean enabled, boolean effects) {
             this.crosshair=name.equals("CustomCrosshair");
             this.customHand=name.equals("CustomHand");
+            this.utility=category.equals("Utils");
             this.name = name;
             this.key = key;
             this.description = description;

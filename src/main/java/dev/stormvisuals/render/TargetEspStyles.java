@@ -39,7 +39,7 @@ final class TargetEspStyles {
                     .withVertexShader(id("core/target_comet")).withFragmentShader(id("core/target_comet"))
                     .withSampler("Sampler0")
                     .withVertexFormat(DefaultVertexFormat.POSITION_TEX_COLOR, VertexFormat.Mode.QUADS)
-                    .withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST).withDepthWrite(false).withCull(false).build());
+                    .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST).withDepthWrite(false).withCull(false).build());
     private static final RenderPipeline GLOW = RenderPipelines.register(
             RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
                     .withLocation(id("pipeline/target_crystal_glow"))
@@ -100,8 +100,8 @@ final class TargetEspStyles {
                              float x, float y, float z, float r, float g, float b) {
         double cycle = f.time() * 2.8;
         float height = y + f.height() * (.06F + .88F * (float) (.5 - .5 * Math.cos(cycle)));
-        // One short cylinder band trails opposite the vertical velocity and collapses smoothly at a reversal.
-        float end = height - (float) Math.sin(cycle) * Math.min(.22F, f.height() * .12F);
+        // One cylinder band trails opposite the vertical velocity and collapses smoothly at a reversal.
+        float end = height - (float) Math.sin(cycle) * Math.min(.44F, f.height() * .24F);
         float radius = f.width() * .5F + .18F;
         VertexConsumer v = context.consumers().getBuffer(RING);
         for (int i = 0; i < SEGMENTS; i++) {
@@ -112,14 +112,13 @@ final class TargetEspStyles {
         }
         finish(context, RING);
         // Native lines keep a one-pixel contour at any distance, above the darker cylinder trail.
-        float lr = .65F + r * .35F, lg = .65F + g * .35F, lb = .65F + b * .35F;
         VertexConsumer line = context.consumers().getBuffer(RING_LINE);
         for (int i = 0; i < SEGMENTS; i++) {
             context.matrices().last().transformNormal((COS[i + 1] - COS[i]) * NORMAL_SCALE, 0,
                     (SIN[i + 1] - SIN[i]) * NORMAL_SCALE, NORMAL);
-            line.addVertex(pose, x + COS[i] * radius, height, z + SIN[i] * radius).setColor(lr, lg, lb, f.opacity())
+            line.addVertex(pose, x + COS[i] * radius, height, z + SIN[i] * radius).setColor(1F, 0F, 0F, f.opacity())
                     .setNormal(NORMAL.x, NORMAL.y, NORMAL.z).setLineWidth(1);
-            line.addVertex(pose, x + COS[i + 1] * radius, height, z + SIN[i + 1] * radius).setColor(lr, lg, lb, f.opacity())
+            line.addVertex(pose, x + COS[i + 1] * radius, height, z + SIN[i + 1] * radius).setColor(1F, 0F, 0F, f.opacity())
                     .setNormal(NORMAL.x, NORMAL.y, NORMAL.z).setLineWidth(1);
         }
         finish(context, RING_LINE);
@@ -150,7 +149,7 @@ final class TargetEspStyles {
                     int offset = FACES[face * 3 + corner] * 3;
                     float vx = CRYSTAL_VERTICES[offset] * scale, vy = CRYSTAL_VERTICES[offset + 1] * scale, vz = CRYSTAL_VERTICES[offset + 2] * scale;
                     vertex(v, pose, cx + cos * vx + sin * vz, cy + vy, cz - sin * vx + cos * vz,
-                            Math.min(1, r * light), Math.min(1, g * light), Math.min(1, b * light), f.opacity() * .494F);
+                            Math.min(1, r * light), Math.min(1, g * light), Math.min(1, b * light), f.opacity() * .25F);
                 }
             }
         }

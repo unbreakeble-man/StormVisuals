@@ -17,9 +17,9 @@ public final class HudRenderSystem {
     private HudRenderSystem() {
     }
 
-    /** Register a layer during client initialization, before {@link #initialize()}. */
+    /** Register at startup, or during a development reload on the client thread. */
     public static void addLayer(HudElement layer) {
-        if (initialized) {
+        if (initialized && !dev.stormvisuals.dev.LiveReload.isApplying()) {
             throw new IllegalStateException("HUD layers must be registered before initialization");
         }
         LAYERS.add(Objects.requireNonNull(layer, "layer"));
@@ -42,6 +42,7 @@ public final class HudRenderSystem {
                     for (HudElement layer : LAYERS) {
                         layer.render(graphics, tickCounter);
                     }
+                    HudDragging.renderGuides(graphics);
                 }
         );
     }
